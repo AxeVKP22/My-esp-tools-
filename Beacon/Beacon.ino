@@ -21,12 +21,11 @@ uint8_t beacon[] = {
   0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01,
   0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01,
   0x00, 0x00,
-
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x64, 0x00,
   0x31, 0x04,
 
-  0x00, 0x08, 'A','x','e','V','K','P','2','2',
+  0x00, 0x00,
 
   0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c,
 
@@ -34,8 +33,6 @@ uint8_t beacon[] = {
 
   0x05, 0x04, 0x00, 0x01, 0x00, 0x00
 };
-
-
 
 void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -60,11 +57,24 @@ void setup() {
 }
 
 void loop() {
-  for (int i = 0; i < 50; i++) {
-    wifi_send_pkt_freedom(beacon, sizeof(beacon), 0);
-    delay(10);
+  for (int i = 0; i < 100; i++) {
+    String ssid = "Axevkp" + String(i);
+    int ssid_len = ssid.length();
+
+    uint8_t packet[128];
+    memcpy(packet, beacon, sizeof(beacon));
+
+    packet[36] = 0x00;
+    packet[37] = ssid_len;
+
+    memcpy(&packet[38], ssid.c_str(), ssid_len);
+
+    
+    int packet_size = 38 + ssid_len + 18;
+
+    wifi_send_pkt_freedom(packet, packet_size, 0);
+    delay(5);
   }
-  delay(500);
+
+  delay(1000);
 }
-
-
