@@ -40,7 +40,6 @@ uint8_t beacon[] = {
   0x05, 0x04, 0x00, 0x01, 0x00, 0x00
 };
 
-// Буфер для сниффера
 volatile bool newPacket = false;
 char lastPacketInfo[64] = {0};
 
@@ -50,10 +49,29 @@ long lastChannelSwitch = 0;
 void ICACHE_FLASH_ATTR sniffer_callback(uint8_t *buf, uint16_t len) {
   if (len == 0 || buf == nullptr) return;
 
-  uint8_t* sender_mac = buf + 10;
-  sprintf(lastPacketInfo, "MAC: %02X:%02X:%02X:%02X:%02X:%02X Len: %d",
-          sender_mac[0], sender_mac[1], sender_mac[2],
-          sender_mac[3], sender_mac[4], sender_mac[5], len);
+  uint8_t frame_type = buf[0] & 0x0C;
+  uint8_t frame_subtype = buf[0] & 0xF0;
+
+  const char* type_str = "";
+  const char* subtype_str = "";
+
+  switch (frame_type) {
+    case 0x00: type_str = "Mgmt"; break;
+    case 0x04: type_str = "Ctrl"; break;
+    case 0x08: type_str = "Data"; break;
+    default: type_str = "Unknown"; break;
+  }
+
+  switch (frame_subtype) {
+    case 0x80: subtype_str = "Beacon"; break;
+    case 0x40: subtype_str = "Probe Req"; break;
+    case 0x50: subtype_str = "Probe Resp"; break;
+    case 0xD4: subtype_str = "ACK"; break;
+    case 0xB0: subtype_str = "Auth"; break;
+    default: subtype_str = "Other"; break;
+  }
+
+  snprintf(lastPacketInfo, sizeof(lastPacketInfo), "%s / %s", type_str, subtype_str);
   newPacket = true;
 }
 
@@ -67,6 +85,7 @@ void setup() {
   wifi_set_opmode(STATION_MODE);
   wifi_set_channel(currentChannel);
   wifi_set_promiscuous_rx_cb(sniffer_callback);
+  wifi_promiscuous_enable(1);
   mils = millis();
   state = 2;
 }
@@ -96,9 +115,9 @@ void loop() {
     display.setCursor(0, 10);
     display.print(F("WiFi scanner"));
     display.setCursor(0, 28);
-    display.print(F("sniffer"));
-    display.setCursor(0, 46);
     display.print(F("Beacon spam"));
+    display.setCursor(0, 46);
+    display.print(F("Sniffer"));
 
     if (menuIndex == 0) display.drawBitmap(100, 11, arrow, 3, 5, SSD1306_WHITE);
     if (menuIndex == 1) display.drawBitmap(100, 29, arrow, 3, 5, SSD1306_WHITE);
@@ -123,8 +142,10 @@ void loop() {
     }
     display.display();
     delay(5000);
-    state = 2;
+    wifi_promiscuous_enable(1);
   }
+
+  if (state == 2) return;
 
   if (state == 3) {
     display.clearDisplay();
@@ -134,7 +155,7 @@ void loop() {
     display.print(F("Beaconing..."));
     display.display();
     for (int i = 0; i < 100; i++) {
-      String ssid = "hehehehhe" + String(i);
+      String ssid = "hehehe" + String(i);
       int ssid_len = ssid.length();
       uint8_t packet[128];
       memcpy(packet, beacon, sizeof(beacon));
@@ -146,23 +167,14 @@ void loop() {
       delay(5);
     }
     delay(1000);
-    state = 2;
   }
 
   if (state == 4) {
-    static bool sniffingStarted = false;
-    if (!sniffingStarted) {
-      wifi_promiscuous_enable(1);
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println(F("Sniffing..."));
-      display.display();
-      sniffingStarted = true;
-    }
-
     if (newPacket) {
       display.clearDisplay();
       display.setCursor(0, 0);
+      display.setTextSize(1);
+      display.setTextColor(SSD1306_WHITE);
       display.println("Sniffing...");
       display.setCursor(0, 20);
       display.println(lastPacketInfo);
@@ -175,6 +187,15 @@ void loop() {
       if (currentChannel > 13) currentChannel = 1;
       wifi_set_channel(currentChannel);
       lastChannelSwitch = mils;
+    }
+
+    if (buttonState2 && (mils - lastMils) > 250) {
+      lastMils = mils;
+      state = 2;
+      wifi_promiscuous_enable(0);
+      display.clearDisplay();
+      display.display();
+      delay(300);
     }
   }
 }
